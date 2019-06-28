@@ -1,5 +1,6 @@
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTiles.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/GPUVecArray.h"
+#include "DataFormats/DetId/interface/DetId.h"
 
 #include <cuda_runtime.h>
 #include <cuda.h>
@@ -17,6 +18,7 @@ static const int BufferSizePerSeed = 20;
 
 struct CellsOnLayerPtr
 {
+  DetId *detid;
   float *x; 
   float *y ;
   int *layer ;
@@ -52,6 +54,7 @@ class ClueGPURunner{
 
         void init_device(){
             unsigned int reserveNumberOfCells = 1000000;
+            cudaMalloc(&d_cells.detid, sizeof(DetId)*reserveNumberOfCells);
             cudaMalloc(&d_cells.x, sizeof(float)*reserveNumberOfCells);
             cudaMalloc(&d_cells.y, sizeof(float)*reserveNumberOfCells);
             cudaMalloc(&d_cells.layer, sizeof(int)*reserveNumberOfCells);
@@ -70,6 +73,7 @@ class ClueGPURunner{
         }
 
         void free_device(){
+            cudaFree(d_cells.detid);
             cudaFree(d_cells.x);
             cudaFree(d_cells.y);
             cudaFree(d_cells.layer);
@@ -100,6 +104,7 @@ class ClueGPURunner{
 
 
         void copy_todevice(CellsOnLayer& cellsOnLayer){
+            cudaMemcpy(d_cells.detid, cellsOnLayer.detid.data(), sizeof(DetId)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.x, cellsOnLayer.x.data(), sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.y, cellsOnLayer.y.data(), sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.layer, cellsOnLayer.layer.data(), sizeof(int)*numberOfCells, cudaMemcpyHostToDevice);

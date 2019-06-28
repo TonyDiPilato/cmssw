@@ -113,7 +113,7 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
           float xTwo = d_cells.x[idxTwo];
           float yTwo = d_cells.y[idxTwo];
           float distance = std::sqrt((xOne-xTwo)*(xOne-xTwo) + (yOne-yTwo)*(yOne-yTwo));
-          bool foundHigher = d_cells.rho[idxTwo] > rhoOne;
+          bool foundHigher = d_cells.rho[idxTwo] > rhoOne || (d_cells.rho[idxTwo] == rhoOne && d_cells.detid[idxTwo] > d_cells.detid[idxOne]);
           if(foundHigher && distance <= idxOne_delta) {
             // update i_delta
             idxOne_delta = distance;
