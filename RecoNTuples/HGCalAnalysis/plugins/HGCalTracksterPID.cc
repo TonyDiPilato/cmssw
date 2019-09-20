@@ -1565,7 +1565,7 @@ void HGCalTracksterPID::analyze(const edm::Event &iEvent, const edm::EventSetup 
   }
 
 
-  // Fills the additional 2d layers
+  // Fills the 2d layers
   for (unsigned ic = 0; ic < nclus; ++ic) {
 
 
@@ -1634,7 +1634,8 @@ void HGCalTracksterPID::analyze(const edm::Event &iEvent, const edm::EventSetup 
 
         for(auto& cp: CPEnergyInLC)
         {
-          if(cp.second>maxCPEnergyInLC)
+          // the best CP will be associated if it has at least half the energy of the LC
+          if(cp.second>maxCPEnergyInLC && cp.second>(0.5*(clusterPtr->energy())))
           {
             maxCPEnergyInLC =cp.second;
             maxCPId = cp.first;
