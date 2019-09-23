@@ -1386,64 +1386,64 @@ void HGCalTracksterPID::analyze(const edm::Event &iEvent, const edm::EventSetup 
     ntracksterEM = trackstersEM.size();
     for (unsigned it = 0; it < ntracksterEM; ++it)
     {
-      std::cout << "TracksterEM " << it << std::endl;
+      // std::cout << "TracksterEM " << it << std::endl;
 
       std::vector<unsigned int> ids;
       for (unsigned int i = 0; i < trackstersEM[it].vertices.size(); i++)
       {
-        std::cout << trackstersEM[it].vertices[i] << " - ";
+        // std::cout << trackstersEM[it].vertices[i] << " - ";
         ids.push_back(trackstersEM[it].vertices[i]);
       }
-      std::cout << std::endl;
-      std::cout << std::endl;
+      // std::cout << std::endl;
+      // std::cout << std::endl;
       tracksterEM_clusters_.push_back(ids);
     }
 
     ntracksterHAD = trackstersHAD.size();
     for (unsigned it = 0; it < ntracksterHAD; ++it)
     {
-      std::cout << "TracksterHAD " << it << std::endl;
+      // std::cout << "TracksterHAD " << it << std::endl;
 
       std::vector<unsigned int> ids;
       for (unsigned int i = 0; i < trackstersHAD[it].vertices.size(); i++)
       {
-        std::cout << trackstersHAD[it].vertices[i] << " - ";
+        // std::cout << trackstersHAD[it].vertices[i] << " - ";
         ids.push_back(trackstersHAD[it].vertices[i]);
       }
-      std::cout << std::endl;
-      std::cout << std::endl;
+      // std::cout << std::endl;
+      // std::cout << std::endl;
       tracksterHAD_clusters_.push_back(ids);
     }
 
     ntracksterMIP = trackstersMIP.size();
     for (unsigned it = 0; it < ntracksterMIP; ++it)
     {
-      std::cout << "TracksterMIP " << it << std::endl;
+      // std::cout << "TracksterMIP " << it << std::endl;
 
       std::vector<unsigned int> ids;
       for (unsigned int i = 0; i < trackstersMIP[it].vertices.size(); i++)
       {
-        std::cout << trackstersMIP[it].vertices[i] << " - ";
+        // std::cout << trackstersMIP[it].vertices[i] << " - ";
         ids.push_back(trackstersMIP[it].vertices[i]);
       }
-      std::cout << std::endl;
-      std::cout << std::endl;
+      // std::cout << std::endl;
+      // std::cout << std::endl;
       tracksterMIP_clusters_.push_back(ids);
     }
 
     ntracksterTrk = trackstersTrk.size();
     for (unsigned it = 0; it < ntracksterTrk; ++it)
     {
-      std::cout << "TracksterTrk " << it << std::endl;
+      // std::cout << "TracksterTrk " << it << std::endl;
 
       std::vector<unsigned int> ids;
       for (unsigned int i = 0; i < trackstersTrk[it].vertices.size(); i++)
       {
-        std::cout << trackstersTrk[it].vertices[i] << " - ";
+        // std::cout << trackstersTrk[it].vertices[i] << " - ";
         ids.push_back(trackstersTrk[it].vertices[i]);
       }
-      std::cout << std::endl;
-      std::cout << std::endl;
+      // std::cout << std::endl;
+      // std::cout << std::endl;
       tracksterTrk_clusters_.push_back(ids);
     }
 
@@ -1474,7 +1474,7 @@ void HGCalTracksterPID::analyze(const edm::Event &iEvent, const edm::EventSetup 
   // for (const auto& cpId : cPIndices) {
   for (unsigned cpId = 0; cpId < nCaloParticles; ++cpId)
   {
-    std::cout << "Calo part : " << (*caloParticles)[cpId].pdgId() << std::endl;
+    // std::cout << "Calo part : " << (*caloParticles)[cpId].pdgId() << std::endl;
     const SimClusterRefVector& simClusterRefVector = (*caloParticles)[cpId].simClusters();
 
     for (const auto& it_sc : simClusterRefVector) {
@@ -1571,7 +1571,7 @@ void HGCalTracksterPID::analyze(const edm::Event &iEvent, const edm::EventSetup 
 
     edm::Ptr<reco::BasicCluster> clusterPtr(clusterHandle, ic);
 
-    std::cout << "Cluster n." << ic << " : ";
+    // std::cout << "Cluster n." << ic << " : ";
 
     if (storedLayerClusters_.find(clusterPtr) == storedLayerClusters_.end()) {
 
@@ -1635,8 +1635,9 @@ void HGCalTracksterPID::analyze(const edm::Event &iEvent, const edm::EventSetup 
         for(auto& cp: CPEnergyInLC)
         {
           // the best CP will be associated if it has at least half the energy of the LC
-          if(cp.second>maxCPEnergyInLC && cp.second>(0.5*(clusterPtr->energy())))
+          if(cp.second>maxCPEnergyInLC && cp.second>0.5*(clusterPtr->energy()))
           {
+            // std::cout << "cp " << cp.first << " with energy " << cp.second << " in LC with energy " << clusterPtr->energy() << std::endl;
             maxCPEnergyInLC =cp.second;
             maxCPId = cp.first;
             maxCPPdg = (*caloParticles)[maxCPId].pdgId();
