@@ -313,11 +313,11 @@ class HGCalTracksterPID : public edm::one::EDAnalyzer<edm::one::WatchRuns, edm::
   std::vector<int> cluster2d_rechitSeed_;
   // std::vector<std::vector<unsigned int>> cluster2d_trackster_;
 
-  std::vector<std::vector<unsigned int>> cluster2d_cpId_;
+  std::vector<std::vector<int>> cluster2d_cpId_;
   std::vector<std::vector<int>> cluster2d_cpPdg_;
   std::vector<std::vector<float>> cluster2d_cpEnergy_;
 
-  std::vector<unsigned int> cluster2d_best_cpId_;
+  std::vector<int> cluster2d_best_cpId_;
   std::vector<int> cluster2d_best_cpPdg_;
   std::vector<float> cluster2d_best_cpEnergy_;
 
@@ -1598,8 +1598,8 @@ void HGCalTracksterPID::analyze(const edm::Event &iEvent, const edm::EventSetup 
         unsigned int numberOfHitsInLC = hits_and_fractions.size();
 
         auto maxCPEnergyInLC = 0.f;
-        auto maxCPId = -1;
-        auto maxCPPdg = -9999;
+        int maxCPId = -1;
+        int maxCPPdg = -9999;
 
         std::unordered_map<unsigned, float> CPEnergyInLC;
 
