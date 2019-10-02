@@ -321,19 +321,24 @@ void PatternRecognitionbyCA::energyRegressionAndID_TRT(const std::vector<reco::C
   }
 
   // create input and output tensors (4)
-  const char* INPUT_TENSOR_NAME = "input";
-  const char* OUTPUT_TENSOR_NAME_1 = "output/id_probabilities";
-  const char* OUTPUT_TENSOR_NAME_2 = "output/regressed_energy";
+  std::string inputTensorName = "input";
+  std::string outputTensorName_1 = "output/id_probabilities";
+  std::string outputTensorName_2 = "output/regressed_energy";
   const std::string uffFileName{"pixel_only_final.uff"}; //<-- INSERT HERE THE FULL PATH AND THE NAME OF THE UFF MODEL 
-  
+  int volTrack = eidNLayers_ * eidNClusters_ * eidNFeatures_;
+  int areaTrack = eidNClusters_ * eidNFeatures_;
+
+
   auto builder = std::unique_ptr<nvinfer1::IBuilder, samplesCommon::InferDeleter>(nvinfer1::createInferBuilder(gLogger.getTRTLogger()));
   auto network = std::unique_ptr<nvinfer1::INetworkDefinition, samplesCommon::InferDeleter>(builder->createNetwork());
   auto config = std::unique_ptr<nvinfer1::IBuilderConfig, samplesCommon::InferDeleter>(builder->createBuilderConfig());
   auto parser = std::unique_ptr<nvuffparser::IUffParser, samplesCommon::InferDeleter>(nvuffparser::createUffParser());
 
-  parser->registerInput(INPUT_TENSOR_NAME, nvinfer1::Dims3(eidNFeatures_, eidNClusters_, eidNLayers_), nvuffparser::UffInputOrder::kNCHW);
-  parser->registerOutput(OUTPUT_TENSOR_NAME_1);
-  parser->registerOutput(OUTPUT_TENSOR_NAME_2);
+  // Trick: since TRT support the HWC format and our model is WHC, to be sure that the shapes match, we swap H and W.
+  // Now H is the number of layers and W is the number of clusters
+  parser->registerInput(inputTensorName, nvinfer1::Dims3(eidNLayers_, eidNClusters_, eidNFeatures_), nvuffparser::UffInputOrder::kNHWC);
+  parser->registerOutput(outputTensorName_1);
+  parser->registerOutput(outputTensorName_2);
   parser->parse(uffFileName, *network, nvinfer1::DataType::kFLOAT);
 
   builder->setMaxBatchSize(2*batchSize);
@@ -350,90 +355,73 @@ void PatternRecognitionbyCA::energyRegressionAndID_TRT(const std::vector<reco::C
   samplesCommon::BufferManager buffers(mEngine, batchSize);
   auto context = std::unique_ptr<nvinfer1::IExecutionContext, samplesCommon::InferDeleter>(mEngine->createExecutionContext());
 
-  // tensorflow::TensorShape shape({batchSize, eidNLayers_, eidNClusters_, eidNFeatures_});
-  // tensorflow::Tensor input(tensorflow::DT_FLOAT, shape);
-  // tensorflow::NamedTensorList inputList = {{eidInputName_, input}};
+  float* hostInputBuffer = static_cast<float*>(buffers.getHostBuffer(inputTensorName));
 
-  // std::vector<tensorflow::Tensor> outputs;
-  // std::vector<std::string> outputNames;
-  // if (!eidOutputNameEnergy_.empty()) {
-  //   outputNames.push_back(eidOutputNameEnergy_);
-  // }
-  // if (!eidOutputNameId_.empty()) {
-  //   outputNames.push_back(eidOutputNameId_);
-  // }
+  for (int i = 0; i < batchSize; i++) {
+    const Trackster &trackster = tracksters[tracksterIndices[i]];
 
-  // // fill input tensor (5)
-  // for (int i = 0; i < batchSize; i++) {
-  //   const Trackster &trackster = tracksters[tracksterIndices[i]];
+    // per layer, we only consider the first eidNClusters_ clusters in terms of energy, so in order
+    // to avoid creating large / nested structures to do the sorting for an unknown number of total
+    // clusters, create a sorted list of layer cluster indices to keep track of the filled clusters
+    std::vector<int> clusterIndices(trackster.vertices.size());
+    for (int k = 0; k < (int)trackster.vertices.size(); k++) {
+      clusterIndices[k] = k;
+    }
+    sort(clusterIndices.begin(), clusterIndices.end(), [&layerClusters, &trackster](const int &a, const int &b) {
+      return layerClusters[trackster.vertices[a]].energy() > layerClusters[trackster.vertices[b]].energy();
+    });
 
-  //   // per layer, we only consider the first eidNClusters_ clusters in terms of energy, so in order
-  //   // to avoid creating large / nested structures to do the sorting for an unknown number of total
-  //   // clusters, create a sorted list of layer cluster indices to keep track of the filled clusters
-  //   std::vector<int> clusterIndices(trackster.vertices.size());
-  //   for (int k = 0; k < (int)trackster.vertices.size(); k++) {
-  //     clusterIndices[k] = k;
-  //   }
-  //   sort(clusterIndices.begin(), clusterIndices.end(), [&layerClusters, &trackster](const int &a, const int &b) {
-  //     return layerClusters[trackster.vertices[a]].energy() > layerClusters[trackster.vertices[b]].energy();
-  //   });
+    // keep track of the number of seen clusters per layer
+    std::vector<int> seenClusters(eidNLayers_);
 
-  //   // keep track of the number of seen clusters per layer
-  //   std::vector<int> seenClusters(eidNLayers_);
+    // loop through clusters by descending energy
+    for (const int &k : clusterIndices) {
+      // get features per layer and cluster and store the values directly in the input tensor
+      const reco::CaloCluster &cluster = layerClusters[trackster.vertices[k]];
+      int j = rhtools_.getLayerWithOffset(cluster.hitsAndFractions()[0].first) - 1;
+      if (j < eidNLayers_ && seenClusters[j] < eidNClusters_) {
+        // fill features: 0 for eta, 1 for phi and 2 for energy ---> this must become more general, in case we change the number of features
+        hostInputBuffer[i * volTrack + j * areaTrack + seenClusters[j] * eidNFeatures_ + 0] = float(cluster.eta());
+        hostInputBuffer[i * volTrack + j * areaTrack + seenClusters[j] * eidNFeatures_ + 1] = float(cluster.phi());
+        hostInputBuffer[i * volTrack + j * areaTrack + seenClusters[j] * eidNFeatures_ + 2] = float(cluster.energy());
 
-  //   // loop through clusters by descending energy
-  //   for (const int &k : clusterIndices) {
-  //     // get features per layer and cluster and store the values directly in the input tensor
-  //     const reco::CaloCluster &cluster = layerClusters[trackster.vertices[k]];
-  //     int j = rhtools_.getLayerWithOffset(cluster.hitsAndFractions()[0].first) - 1;
-  //     if (j < eidNLayers_ && seenClusters[j] < eidNClusters_) {
-  //       // get the pointer to the first feature value for the current batch, layer and cluster
-  //       float *features = &input.tensor<float, 4>()(i, j, seenClusters[j], 0);
+        // increment seen clusters
+        seenClusters[j]++;
+      }
+    }
 
-  //       // fill features
-  //       *(features++) = float(cluster.eta());
-  //       *(features++) = float(cluster.phi());
-  //       *features = float(cluster.energy());
+    // zero-fill features of empty clusters in each layer (6)
+    for (int j = 0; j < eidNLayers_; j++) {
+      for (int k = seenClusters[j]; k < eidNClusters_; k++) {
+        for (int l = 0; l < eidNFeatures_; l++) {
+        hostInputBuffer[i * volTrack + j * areaTrack + k * eidNFeatures_ + l] = 0.f
+        }
+      }
+    }
+  }
 
-  //       // increment seen clusters
-  //       seenClusters[j]++;
-  //     }
-  //   }
+  buffers.copyInputToDevice();
 
-  //   // zero-fill features of empty clusters in each layer (6)
-  //   for (int j = 0; j < eidNLayers_; j++) {
-  //     for (int k = seenClusters[j]; k < eidNClusters_; k++) {
-  //       float *features = &input.tensor<float, 4>()(i, j, k, 0);
-  //       for (int l = 0; l < eidNFeatures_; l++) {
-  //         *(features++) = 0.f;
-  //       }
-  //     }
-  //   }
-  // }
+  const auto t_start = std::chrono::high_resolution_clock::now();
+  context->execute(batchSize, buffers.getDeviceBindings().data())
+  const auto t_end = std::chrono::high_resolution_clock::now();
+  const float ms = std::chrono::duration<float, std::milli>(t_end - t_start).count();
+  std::cout << "Inference on " << batchSize << " Tracksters performed in " << ms << " milliseconds." << std::endl;
+  
+  buffers.copyOutputToHost();
 
-  // // run the inference (7)
-  // tensorflow::run(eidSession_, inputList, outputNames, &outputs);
-
-  // // store regressed energy per trackster (8)
-  // if (!eidOutputNameEnergy_.empty()) {
-  //   // get the pointer to the energy tensor, dimension is batch x 1
-  //   float *energy = outputs[0].flat<float>().data();
-
-  //   for (const int &i : tracksterIndices) {
-  //     tracksters[i].regressed_energy = *(energy++);
-  //   }
-  // }
-
-  // // store id probabilities per trackster (8)
-  // if (!eidOutputNameId_.empty()) {
-  //   // get the pointer to the id probability tensor, dimension is batch x id_probabilities.size()
-  //   int probsIdx = eidOutputNameEnergy_.empty() ? 0 : 1;
-  //   float *probs = outputs[probsIdx].flat<float>().data();
-
-  //   for (const int &i : tracksterIndices) {
-  //     for (float &p : tracksters[i].id_probabilities) {
-  //       p = *(probs++);
-  //     }
-  //   }
-  // }
+  float* hostIdBuffer = static_cast<const float*>(buffers.getHostBuffer(outputTensorName_1));
+  float* hostEnBuffer = static_cast<const float*>(buffers.getHostBuffer(outputTensorName_2));
+ 
+  for (const int &i : tracksterIndices) {
+    std::cout << "Trackster num " << i;
+    tracksters[i].regressed_energy = *(hostEnBuffer++);
+    std::cout << "Regressed energy " << tracksters[i].regressed_energy;
+    std::cout << "Probabilities: ";
+    for (float &p : tracksters[i].id_probabilities) {
+      p = *(hostIdBuffer++);
+      std::cout << p;
+    }
+    std::cout << "Trackster ended" << std::endl;
+  }
 }
