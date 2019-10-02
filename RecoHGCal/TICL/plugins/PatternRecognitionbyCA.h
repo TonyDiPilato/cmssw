@@ -8,6 +8,7 @@
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
 #include "PhysicsTools/TensorFlow/interface/TensorFlow.h"
 
+
 class HGCGraph;
 
 namespace ticl {
@@ -19,6 +20,7 @@ namespace ticl {
     void makeTracksters(const PatternRecognitionAlgoBase::Inputs& input, std::vector<Trackster>& result) override;
 
     void energyRegressionAndID(const std::vector<reco::CaloCluster>& layerClusters, std::vector<Trackster>& result);
+    void energyRegressionAndID_TRT(const std::vector<reco::CaloCluster>& layerClusters, std::vector<Trackster>& result);
 
   private:
     const std::unique_ptr<HGCGraph> theGraph_;
