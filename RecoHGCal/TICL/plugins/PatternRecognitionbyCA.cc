@@ -14,7 +14,7 @@
 #include "NvUtils.h"
 #include "common.h"
 #include "logger.h"
-#include "buffer.h"
+#include "buffers.h"
 
 using namespace ticl;
 
@@ -328,7 +328,7 @@ void PatternRecognitionbyCA::energyRegressionAndID_TRT(const std::vector<reco::C
   int volTrack = eidNLayers_ * eidNClusters_ * eidNFeatures_;
   int areaTrack = eidNClusters_ * eidNFeatures_;
 
-
+  Logger gLogger;
   auto builder = std::unique_ptr<nvinfer1::IBuilder, samplesCommon::InferDeleter>(nvinfer1::createInferBuilder(gLogger.getTRTLogger()));
   auto network = std::unique_ptr<nvinfer1::INetworkDefinition, samplesCommon::InferDeleter>(builder->createNetwork());
   auto config = std::unique_ptr<nvinfer1::IBuilderConfig, samplesCommon::InferDeleter>(builder->createBuilderConfig());
@@ -345,7 +345,7 @@ void PatternRecognitionbyCA::energyRegressionAndID_TRT(const std::vector<reco::C
   config->setMaxWorkspaceSize(1 << 20);
   config->setFlag(BuilderFlag::kFP16);
   
-  auto mEngine = std::shared_ptr<nvinfer1::ICudaEngine>(builder->buildEngineWithConfig(*network, *config))
+  auto mEngine = std::shared_ptr<nvinfer1::ICudaEngine>(builder->buildEngineWithConfig(*network, *config), samplesCommon::InferDeleter());
   
   parser->destroy();
   network->destroy();
@@ -410,8 +410,8 @@ void PatternRecognitionbyCA::energyRegressionAndID_TRT(const std::vector<reco::C
   
   buffers.copyOutputToHost();
 
-  float* hostIdBuffer = static_cast<const float*>(buffers.getHostBuffer(outputTensorName_1));
-  float* hostEnBuffer = static_cast<const float*>(buffers.getHostBuffer(outputTensorName_2));
+  const float* hostIdBuffer = static_cast<const float*>(buffers.getHostBuffer(outputTensorName_1));
+  const float* hostEnBuffer = static_cast<const float*>(buffers.getHostBuffer(outputTensorName_2));
  
   for (const int &i : tracksterIndices) {
     std::cout << "Trackster num " << i;
@@ -424,4 +424,5 @@ void PatternRecognitionbyCA::energyRegressionAndID_TRT(const std::vector<reco::C
     }
     std::cout << "Trackster ended" << std::endl;
   }
+  nvuffparser::shutdownProtobufLibrary();
 }
