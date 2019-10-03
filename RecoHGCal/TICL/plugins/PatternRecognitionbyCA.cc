@@ -329,33 +329,37 @@ void PatternRecognitionbyCA::energyRegressionAndID_TRT(const std::vector<reco::C
   int areaTrack = eidNClusters_ * eidNFeatures_;
 
   Logger gLogger;
-  auto builder = std::unique_ptr<nvinfer1::IBuilder, samplesCommon::InferDeleter>(nvinfer1::createInferBuilder(gLogger.getTRTLogger()));
-  auto network = std::unique_ptr<nvinfer1::INetworkDefinition, samplesCommon::InferDeleter>(builder->createNetwork());
-  auto config = std::unique_ptr<nvinfer1::IBuilderConfig, samplesCommon::InferDeleter>(builder->createBuilderConfig());
-  auto parser = std::unique_ptr<nvuffparser::IUffParser, samplesCommon::InferDeleter>(nvuffparser::createUffParser());
+  nvinfer1::IBuilder* builder(nvinfer1::createInferBuilder(gLogger.getTRTLogger()));
+  nvinfer1::INetworkDefinition* network(builder->createNetwork());
+  nvinfer1::IBuilderConfig* config(builder->createBuilderConfig());
+  nvuffparser::IUffParser* parser(nvuffparser::createUffParser());
 
   // Trick: since TRT support the HWC format and our model is WHC, to be sure that the shapes match, we swap H and W.
   // Now H is the number of layers and W is the number of clusters
-  parser->registerInput(inputTensorName, nvinfer1::Dims3(eidNLayers_, eidNClusters_, eidNFeatures_), nvuffparser::UffInputOrder::kNHWC);
-  parser->registerOutput(outputTensorName_1);
-  parser->registerOutput(outputTensorName_2);
-  parser->parse(uffFileName, *network, nvinfer1::DataType::kFLOAT);
+  parser->registerInput(inputTensorName.c_str(), nvinfer1::Dims3(eidNLayers_, eidNClusters_, eidNFeatures_), nvuffparser::UffInputOrder::kNHWC);
+  parser->registerOutput(outputTensorName_1.c_str());
+  parser->registerOutput(outputTensorName_2.c_str());
+  parser->parse(uffFileName.c_str(), *network, nvinfer1::DataType::kFLOAT);
 
   builder->setMaxBatchSize(2*batchSize);
   config->setMaxWorkspaceSize(1 << 20);
   config->setFlag(BuilderFlag::kFP16);
   
-  auto mEngine = std::shared_ptr<nvinfer1::ICudaEngine>(builder->buildEngineWithConfig(*network, *config), samplesCommon::InferDeleter());
-  
+  nvinfer1::ICudaEngine* mEngine(builder->buildEngineWithConfig(*network, *config));
+
   parser->destroy();
   network->destroy();
   config->destroy();
   builder->destroy();
 
-  samplesCommon::BufferManager buffers(mEngine, batchSize);
-  auto context = std::unique_ptr<nvinfer1::IExecutionContext, samplesCommon::InferDeleter>(mEngine->createExecutionContext());
+  // samplesCommon::BufferManager buffers(mEngine, batchSize);
+  // auto context = std::unique_ptr<nvinfer1::IExecutionContext, samplesCommon::InferDeleter>(mEngine->createExecutionContext());
+  nvinfer1::IExecutionContext* context(mEngine->createExecutionContext());
 
-  float* hostInputBuffer = static_cast<float*>(buffers.getHostBuffer(inputTensorName));
+  // float* hostInputBuffer = static_cast<float*>(buffers.getHostBuffer(inputTensorName));
+  float* hostInputBuffer;
+  float* hostIdBuffer;
+  float* hostEnBuffer;
 
   for (int i = 0; i < batchSize; i++) {
     const Trackster &trackster = tracksters[tracksterIndices[i]];
@@ -400,7 +404,24 @@ void PatternRecognitionbyCA::energyRegressionAndID_TRT(const std::vector<reco::C
     }
   }
 
-  buffers.copyInputToDevice();
+  // Engine requires exactly IEngine::getNbBindings() number of buffers  
+  int nbBindings = mEngine->getNbBindings();
+  //assert(nbBindings == 3); // 1 input and 2 output
+  std::cout << nbBindings << std::endl;
+  void* buffers[nbBindings];
+
+  // buffers.copyInputToDevice();
+  const int inputIndex = mEngine->getBindingIndex(inputTensorName.c_str());
+  const int outputIndex_id = mEngine->getBindingIndex(outputTensorName_1.c_str());
+  const int outputIndex_er = mEngine->getBindingIndex(outputTensorName_2.c_str());
+
+  // Allocate memory on GPU for buffers
+  CHECK(cudaMalloc(&buffers[inputIndex], batchSize * volTrack * sizeof(float)));
+  CHECK(cudaMalloc(&buffers[outputIndex_id], batchSize * 8 * sizeof(float)));
+  CHECK(cudaMalloc(&buffers[outputIndex_er], batchSize * 1 * sizeof(float)));
+
+  // Copy data to HtD
+  CHECK(cudaMemcpy(buffers[inputIndex], hostInputBuffer, batchSize * volTrack * sizeof(float), cudaMemcpyHostToDevice));
 
   const auto t_start = std::chrono::high_resolution_clock::now();
   context->execute(batchSize, buffers.getDeviceBindings().data())
@@ -408,11 +429,18 @@ void PatternRecognitionbyCA::energyRegressionAndID_TRT(const std::vector<reco::C
   const float ms = std::chrono::duration<float, std::milli>(t_end - t_start).count();
   std::cout << "Inference on " << batchSize << " Tracksters performed in " << ms << " milliseconds." << std::endl;
   
-  buffers.copyOutputToHost();
+  // Copy data to HtD
+  CHECK(cudaMemcpy(hostIdBuffer, buffers[outputIndex_id], batchSize * 8 * sizeof(float), cudaMemcpyDeviceToHost));
+  CHECK(cudaMemcpy(hostEnBuffer, buffers[outputIndex_er], batchSize * 1 * sizeof(float), cudaMemcpyDeviceToHost));
 
-  const float* hostIdBuffer = static_cast<const float*>(buffers.getHostBuffer(outputTensorName_1));
-  const float* hostEnBuffer = static_cast<const float*>(buffers.getHostBuffer(outputTensorName_2));
- 
+  // buffers.copyOutputToHost();
+
+  // const float* hostIdBuffer = static_cast<const float*>(buffers.getHostBuffer(outputTensorName_1));
+  // const float* hostEnBuffer = static_cast<const float*>(buffers.getHostBuffer(outputTensorName_2));
+
+  mEngine->destroy();
+  context -> destroy();
+
   for (const int &i : tracksterIndices) {
     std::cout << "Trackster num " << i;
     tracksters[i].regressed_energy = *(hostEnBuffer++);
@@ -424,5 +452,11 @@ void PatternRecognitionbyCA::energyRegressionAndID_TRT(const std::vector<reco::C
     }
     std::cout << "Trackster ended" << std::endl;
   }
+  
+  // Free GPU memory
+  CHECK(cudaFree(buffers[inputIndex]));
+  CHECK(cudaFree(buffers[outputIndex_id]));
+  CHECK(cudaFree(buffers[outputIndex_er]));
+
   nvuffparser::shutdownProtobufLibrary();
 }
