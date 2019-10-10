@@ -180,10 +180,10 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
               const float dist = distance(xOne, yOne, d_cells.x[idxTwo], d_cells.y[idxTwo]);
               const float rhoTwo = d_cells.rho[idxTwo]; 
 
-              // In GPU rhoTwo==rhoOne somethimes is not true when it should be (due to approximations)
+              // In GPU rhoTwo==rhoOne sometimes is not true when it should be (due to approximations)
               // So we use a epsilon: 1e-7 But the threshold is not sufficiently small
               // Using 1e-8 is too small
-              const bool foundHigher = (rhoTwo > rhoOne) || (abs(rhoTwo-rhoOne)<1e-7 && (d_cells.detid[idxTwo] > d_cells.detid[idxOne]));
+              const bool foundHigher = (rhoTwo > rhoOne) || ( rhoTwo == rhoOne && (d_cells.detid[idxTwo] > d_cells.detid[idxOne]));
               const bool distLower = (dist < idxOne_delta) || ((dist == idxOne_delta) && (rhoTwo > d_cells.rho[idxOne_nearestHigher]));
               
               if(foundHigher && distLower) {
@@ -317,7 +317,7 @@ __global__ void kernel_assign_clusters( GPU::VecArray<int,maxNSeeds>* d_seeds,
   if (idxCls < d_nClusters[idxLayer]){
 
     // buffer is "localStack"
-    int buffer[BufferSizePerSeed];
+    int buffer[BufferSizePerSeed] = {-1};
     int bufferSize = 0;
 
     // asgine cluster to seed[idxCls]
@@ -333,18 +333,17 @@ __global__ void kernel_assign_clusters( GPU::VecArray<int,maxNSeeds>* d_seeds,
       int idxEndOfBuffer = buffer[bufferSize-1];
 
       int temp_clusterIndex = d_cells.clusterIndex[idxEndOfBuffer];
-      GPU::VecArray<int,maxNFollowers> temp_followers = d_followers[idxEndOfBuffer];
               
       // pop_back last element of buffer
       buffer[bufferSize-1] = 0;
       bufferSize--;
 
       // loop over followers of last element of buffer
-      for( int j=0; j < temp_followers.size();j++ ){
-        // pass id to follower
-        d_cells.clusterIndex[temp_followers[j]] = temp_clusterIndex;
+      for( int j : d_followers[idxEndOfBuffer] ){
+          // pass id to follower
+        d_cells.clusterIndex[j] = temp_clusterIndex;
         // push_back follower to buffer
-        buffer[bufferSize] = temp_followers[j];
+        buffer[bufferSize] = j;
         bufferSize++;
       }
     }
