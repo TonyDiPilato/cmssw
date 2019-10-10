@@ -56,7 +56,7 @@ class HGCalLayerTilesGPU {
     __host__ __device__
     int getXBin(float x) const {
       int xBin = (x-minX_)*rX_;
-      xBin = (xBin<nColumns_ ? xBin:nColumns_);
+      xBin = (xBin<nColumns_-1 ? xBin:nColumns_-1);
       xBin = (xBin>0 ? xBin:0);
       // cannot use std:clamp
       return xBin;
@@ -65,7 +65,7 @@ class HGCalLayerTilesGPU {
     __host__ __device__
     int getYBin(float y) const {
       int yBin = (y-minY_)*rY_;
-      yBin = (yBin<nRows_ ? yBin:nRows_);
+      yBin = (yBin<nRows_-1 ? yBin:nRows_-1);
       yBin = (yBin>0 ? yBin:0);
       // cannot use std:clamp
       return yBin;
@@ -74,7 +74,7 @@ class HGCalLayerTilesGPU {
     __host__ __device__
     int getEtaBin(float eta) const {
       int etaBin = (eta - minEta_) * rEta_;
-      etaBin = (etaBin<nColumnsEta_ ? etaBin : nColumnsEta_);
+      etaBin = (etaBin<nColumnsEta_-1 ? etaBin : nColumnsEta_-1);
       etaBin = (etaBin>0 ? etaBin : 0);
       return etaBin;
     }
@@ -82,7 +82,7 @@ class HGCalLayerTilesGPU {
     __host__ __device__
     int getPhiBin(float phi) const {
       int phiBin = (phi - minPhi_) * rPhi_;
-      phiBin = (phiBin<nRowsPhi_ ? phiBin : nRowsPhi_);
+      phiBin = (phiBin<nRowsPhi_-1 ? phiBin : nRowsPhi_-1);
       phiBin = (phiBin>0 ? phiBin : 0);
       return phiBin;
     }

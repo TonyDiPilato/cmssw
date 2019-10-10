@@ -43,7 +43,7 @@ public:
     constexpr float r = hgcaltilesconstants::nColumns / xRange;
     int xBin = (x - hgcaltilesconstants::minX) * r;
     // xBin = std::clamp(xBin, 0, hgcaltilesconstants::nColumns);
-    xBin = std::min(xBin,hgcaltilesconstants::nColumns);
+    xBin = std::min(xBin,hgcaltilesconstants::nColumns-1);
     xBin = std::max(xBin,0);
     return xBin;
   }
@@ -54,7 +54,7 @@ public:
     constexpr float r = hgcaltilesconstants::nRows / yRange;
     int yBin = (y - hgcaltilesconstants::minY) * r;
     // yBin = std::clamp(yBin, 0, hgcaltilesconstants::nRows);
-    yBin = std::min(yBin,hgcaltilesconstants::nRows);
+    yBin = std::min(yBin,hgcaltilesconstants::nRows-1);
     yBin = std::max(yBin,0);
     return yBin;
   }
@@ -65,7 +65,7 @@ public:
     constexpr float r = hgcaltilesconstants::nColumnsEta / etaRange;
     int etaBin = (eta - hgcaltilesconstants::minEta) * r;
     // etaBin = std::clamp(etaBin, 0, hgcaltilesconstants::nColumnsEta);
-    etaBin = std::min(etaBin,hgcaltilesconstants::nColumnsEta);
+    etaBin = std::min(etaBin,hgcaltilesconstants::nColumnsEta-1);
     etaBin = std::max(etaBin,0);
     return etaBin;
   }
@@ -76,7 +76,7 @@ public:
     constexpr float r = hgcaltilesconstants::nRowsPhi / phiRange;
     int phiBin = (phi - hgcaltilesconstants::minPhi) * r;
     // phiBin = std::clamp(phiBin, 0, hgcaltilesconstants::nRowsPhi);
-    phiBin = std::min(phiBin,hgcaltilesconstants::nRowsPhi);
+    phiBin = std::min(phiBin,hgcaltilesconstants::nRowsPhi-1);
     phiBin = std::max(phiBin,0);
     return phiBin;
   }
